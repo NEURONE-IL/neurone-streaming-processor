@@ -1,0 +1,34 @@
+[
+  { "userId": "U1", "docId": "P1" },
+  { "userId": "U2", "docId": "P2" },
+  { "userId": "U3", "docId": "P3" },
+  { "userId": "U4", "docId": "P1" },
+  { "userId": "U5", "docId": "P2" },
+  { "userId": "U2", "docId": "P4" },
+  { "userId": "U1", "docId": "P5" },
+  { "userId": "U3", "docId": "P5" },
+  { "userId": "U5", "docId": "P1" },
+  { "userId": "U4", "docId": "P2" },
+  { "userId": "U4", "docId": "P2" },
+  { "userId": "U2", "docId": "P2" },
+  { "userId": "U2", "docId": "P3" },
+  { "userId": "U1", "docId": "P5" },
+  { "userId": "U1", "docId": "P5" },
+  { "userId": "U3", "docId": "P2" },
+  {
+    "schema": { "type": "string", "optional": false },
+    "payload": "{\"_id\": {\"_data\": \"82604E9668000000052B022C0100296E5A10043AB0A0F0A10B44ABAB2190A219536F2346645F69640064604E9668A6EC31283FA7A0FC0004\"}, \"operationType\": \"insert\", \"clusterTime\": {\"$timestamp\": {\"t\": 1615763048, \"i\": 5}}, \"fullDocument\": {\"_id\": {\"$oid\": \"604e9668a6ec31283fa7a0fc\"}, \"username\": \"participant2\", \"localTimestamp\": 1.615763048904E12, \"url\": \"/search?querycuál es el país más grande de el mundo\", \"state\": \"PageExit\", \"__v\": 0}, \"ns\": {\"db\": \"test\", \"coll\": \"visitedlinks\"}, \"documentKey\": {\"_id\": {\"$oid\": \"604e9668a6ec31283fa7a0fc\"}}}"
+  },
+  {
+    "_id": {
+      "_data": "82604E9E20000000032B022C0100296E5A10043AB0A0F0A10B44ABAB2190A219536F2346645F69640064604E9E20EFC2AB4DA14464F00004"
+    },
+    "username": "participant0",
+    "localTimestamp": 1.615765024043e12,
+    "url": "/page/d8",
+    "state": "PageEnter",
+    "__v": 0,
+    "clusterTime": { "$timestamp": { "t": 1615765024, "i": 3 } },
+    "documentKey": { "_id": { "$oid": "604e9e20efc2ab4da14464f0" } }
+  }
+]

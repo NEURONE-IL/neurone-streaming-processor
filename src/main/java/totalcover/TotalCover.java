@@ -41,8 +41,8 @@ import java.util.Properties;
 
 public class TotalCover {
 
-  static final String TEST_VISITEDLINKS_TOPIC = "test.visitedlinks";
-  static final String DB_BOOKMARKS_TOPIC = "test.bookmarks";
+  static final String TEST_VISITEDLINKS_TOPIC = "neurone.visitedlinks";
+  static final String DB_BOOKMARKS_TOPIC = "neurone.bookmarks";
   static final String DEFAULT_HOST = "localhost";
   static final String VISITED_LINK_STORE = "visitedlinks-store";
 

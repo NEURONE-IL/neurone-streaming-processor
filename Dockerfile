@@ -10,7 +10,7 @@ FROM openjdk:11-jdk-slim
 
 RUN mkdir /app
 
-COPY --from=build /home/maven/src/target/totalcover-1.0.0-jar-with-dependencies.jar /app/target/totalcover-1.0.0-jar-with-dependencies.jar
+COPY --from=build /home/maven/src/target/streaming-1.0.0-jar-with-dependencies.jar /app/target/streaming-1.0.0-jar-with-dependencies.jar
 COPY start.sh app/start.sh
 WORKDIR /app
 RUN ls

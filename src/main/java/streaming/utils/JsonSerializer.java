@@ -1,4 +1,4 @@
-package totalcover.utils;
+package streaming.utils;
 
 import java.util.Map;
 

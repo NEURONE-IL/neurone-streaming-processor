@@ -1,4 +1,4 @@
-package totalcover.objects;
+package streaming.objects;
 
 import java.util.Map;
 

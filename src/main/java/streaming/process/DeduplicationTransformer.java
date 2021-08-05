@@ -1,4 +1,4 @@
-package totalcover.process;
+package streaming.process;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
@@ -9,12 +9,16 @@ public class DeduplicationTransformer<K, V, E> implements ValueTransformerWithKe
 
     private KeyValueStore<E, Long> dedupStateStore;
     private final String storeName;
+    private final String ttlStoreName;
     private ProcessorContext context;
     private final KeyValueMapper<K, V, E> idExtractor;
+    private  KeyValueStore<String,Long> ttlStore;
     private final String type;
 
-    public DeduplicationTransformer(String storeName, final KeyValueMapper<K, V, E> idExtractor, String type) {
+    public DeduplicationTransformer(String storeName, String ttlStoreName, 
+    final KeyValueMapper<K, V, E> idExtractor, String type) {
         this.storeName = storeName;
+        this.ttlStoreName=ttlStoreName;
         this.idExtractor = idExtractor;
         this.type = type;
     }
@@ -23,6 +27,7 @@ public class DeduplicationTransformer<K, V, E> implements ValueTransformerWithKe
     public void init(ProcessorContext context) {
         this.context = context;
         this.dedupStateStore = this.context.getStateStore(storeName);
+        this.ttlStore=this.context.getStateStore(ttlStoreName);
 
     }
 
@@ -70,6 +75,7 @@ public class DeduplicationTransformer<K, V, E> implements ValueTransformerWithKe
             return true;
         } else {
             dedupStateStore.put(id, context.timestamp());
+            ttlStore.put(id+"-dedup",context.timestamp());
             return false;
         }
     }
@@ -87,6 +93,7 @@ public class DeduplicationTransformer<K, V, E> implements ValueTransformerWithKe
                 return false;
             } else if(action.equals("Bookmark")){
                 dedupStateStore.put(id, context.timestamp());
+                ttlStore.put(id+"-dedup",context.timestamp());
                 return false;
             } else{
                 return true;

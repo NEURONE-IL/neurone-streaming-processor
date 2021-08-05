@@ -1,4 +1,4 @@
-package totalcover.utils;
+package streaming.utils;
 
 import spark.ResponseTransformer;
 import com.fasterxml.jackson.databind.ObjectMapper;

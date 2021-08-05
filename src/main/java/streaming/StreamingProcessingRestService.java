@@ -1,4 +1,4 @@
-package totalcover;
+package streaming;
 
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.common.KafkaFuture.Function;
@@ -21,7 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 // import org.glassfish.jersey.jackson.JacksonFeature;
 
-import totalcover.utils.JsonTransformer;
+import streaming.utils.JsonTransformer;
 
 // import org.glassfish.jersey.server.ResourceConfig;
 // import org.glassfish.jersey.servlet.ServletContainer;
@@ -44,12 +44,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TotalCoverRestService {
+public class StreamingProcessingRestService {
 
  
   // private final MetadataService metadataService;
 
-  public TotalCoverRestService(final KafkaStreams streams, final HostInfo hostInfo){
+  public StreamingProcessingRestService(final KafkaStreams streams, final HostInfo hostInfo){
 
     port(hostInfo.port());
     get("/keyvalue/:storeName/:key", (req, res) -> {
@@ -105,6 +105,7 @@ public class TotalCoverRestService {
         throw new NotFoundException();
       }
    // fetch the window results for the given key and time range
+   
       final WindowStoreIterator<Long> results = store.fetch(key, Instant.ofEpochMilli(from), Instant.ofEpochMilli(to));
       final List<KeyValueBean> windowResults = new ArrayList<>();
       while (results.hasNext()) {

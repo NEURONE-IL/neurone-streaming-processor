@@ -1,13 +1,12 @@
 //https://medium.com/@agvillamizar/implementing-custom-serdes-for-java-objects-using-json-serializer-and-deserializer-in-kafka-streams-d794b66e7c03
-package totalcover.utils;
+package streaming.utils;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 
-
-import totalcover.objects.Bookmark;
-import totalcover.objects.TotalCoverMetric;
-import totalcover.objects.VisitedLink;
+import streaming.objects.Bookmark;
+import streaming.objects.Metric;
+import streaming.objects.VisitedLink;
 
 public final class CustomSerders {
 
@@ -18,9 +17,9 @@ public final class CustomSerders {
         }
     }
 
-    static public final class TotalCoverMetricSerde extends Serdes.WrapperSerde<TotalCoverMetric>{
+    static public final class TotalCoverMetricSerde extends Serdes.WrapperSerde<Metric>{
         public  TotalCoverMetricSerde(){
-            super(new JsonSerializer<>(),new JsonDeserializer<>(TotalCoverMetric.class));
+            super(new JsonSerializer<>(),new JsonDeserializer<>(Metric.class));
         }
     }
 
@@ -34,7 +33,7 @@ public final class CustomSerders {
         return new CustomSerders.VisitedLinkSerde();
     }
 
-    public static Serde<TotalCoverMetric> TotalCoverMetric(){
+    public static Serde<Metric> TotalCoverMetric(){
         return new CustomSerders.TotalCoverMetricSerde();
     }
 

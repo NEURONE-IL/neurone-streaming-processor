@@ -1,6 +1,8 @@
 package streaming;
 
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.KafkaFuture.Function;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
@@ -21,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 // import org.glassfish.jersey.jackson.JacksonFeature;
 
+import streaming.objects.Latency;
 import streaming.utils.JsonTransformer;
 
 // import org.glassfish.jersey.server.ResourceConfig;
@@ -42,7 +45,9 @@ import static spark.Spark.*;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class StreamingProcessingRestService {
 
@@ -145,6 +150,36 @@ public class StreamingProcessingRestService {
 
     },new JsonTransformer());
 
+    get("/metrics",(res,req)->{
+
+      try {
+        
+
+
+        HashMap<MetricName,Metric> metrics= new HashMap<MetricName,Metric>(streams.metrics());
+        List<Latency> latencyList= new ArrayList<>();
+     
+        for(Map.Entry<MetricName,Metric> entry: metrics.entrySet()){
+      
+
+          if(entry.getKey().name().contains("record-e2e-latency") && entry.getKey().tags().containsKey("processor-node-id") 
+          && entry.getKey().tags().get("processor-node-id").contains("sink")
+          ){
+
+            System.out.println(entry.getKey());
+            System.out.println(entry.getValue().metricValue());
+            latencyList.add(new Latency(entry.getKey().name(),
+            entry.getKey().tags().get("processor-node-id"),
+            (Double) entry.getValue().metricValue()));
+          }
+        }
+  
+        return latencyList;
+      } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+      }
+    },new JsonTransformer());
 
     after((req,res)->{
 

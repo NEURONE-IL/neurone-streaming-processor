@@ -1,10 +1,8 @@
 package streaming;
 
-import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
+
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.KafkaFuture.Function;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -15,31 +13,18 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 // import org.glassfish.jersey.jackson.JacksonFeature;
 
-import streaming.objects.Latency;
+import streaming.objects.KafkaMetric;
 import streaming.utils.JsonTransformer;
 
 // import org.glassfish.jersey.server.ResourceConfig;
 // import org.glassfish.jersey.servlet.ServletContainer;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.GenericType;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.ws.rs.NotFoundException;
+
 
 import static spark.Spark.*;
 
@@ -51,8 +36,6 @@ import java.util.Map;
 
 public class StreamingProcessingRestService {
 
- 
-  // private final MetadataService metadataService;
 
   public StreamingProcessingRestService(final KafkaStreams streams, final HostInfo hostInfo){
 
@@ -155,26 +138,29 @@ public class StreamingProcessingRestService {
       try {
         
 
-
+        HashMap<String,Object> response=new HashMap<>();
         HashMap<MetricName,Metric> metrics= new HashMap<MetricName,Metric>(streams.metrics());
-        List<Latency> latencyList= new ArrayList<>();
+        List<KafkaMetric> metricsList= new ArrayList<>();
      
         for(Map.Entry<MetricName,Metric> entry: metrics.entrySet()){
       
 
-          if(entry.getKey().name().contains("record-e2e-latency") && entry.getKey().tags().containsKey("processor-node-id") 
-          && entry.getKey().tags().get("processor-node-id").contains("sink")
+          if((entry.getKey().name().contains("record-e2e-latency") && entry.getKey().tags().containsKey("processor-node-id") 
+          && entry.getKey().tags().get("processor-node-id").contains("sink")) || 
+          entry.getKey().name().contains("process-rate") || entry.getKey().name().contains("process-total") 
           ){
 
-            System.out.println(entry.getKey());
-            System.out.println(entry.getValue().metricValue());
-            latencyList.add(new Latency(entry.getKey().name(),
+            // System.out.println(entry.getKey());
+            // System.out.println(entry.getValue().metricValue());
+            metricsList.add(new KafkaMetric(entry.getKey().name(),
             entry.getKey().tags().get("processor-node-id"),
+            entry.getKey().group(),
             (Double) entry.getValue().metricValue()));
           }
         }
-  
-        return latencyList;
+        response.put("timestamp", System.currentTimeMillis());
+        response.put("metrics",metricsList);
+        return response;
       } catch (Exception e) {
         e.printStackTrace();
         return null;

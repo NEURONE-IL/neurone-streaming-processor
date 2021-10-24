@@ -4,22 +4,17 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class VisitedLink {
+public class Query {
     public String username;
     public String url;
-    public String state;
     public Double localTimestamp;
+    public String query;
 
     @JsonProperty("payload")
-    private void unpackNested(Map<String,Object> payload) {
+    private void unpackNested(Map<String,Object> payload){
         this.username = (String)payload.get("username");
         this.url=(String)payload.get("url");
-        this.state= (String) payload.get("state");
         this.localTimestamp= (Double) payload.get("localTimestamp");
-    }
-    @Override
-    public String toString() {
-        // TODO Auto-generated method stub
-        return "D11";
+        this.query= (String) payload.get("query");
     }
 }

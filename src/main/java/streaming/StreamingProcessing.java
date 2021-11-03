@@ -276,7 +276,7 @@ public class StreamingProcessing {
 
     KStream<String, Double> pagestayRaw = pageLinks.transformValues(pageStayTranformerSuplier,
         STREAMING_STATE_PAGE_STAY_STORE, STREAMING_STATE_PAGE_SEQUENCE_STORE)
-        .filter((k, v) -> v > 0, Named.as("filter_not_null_pagestay"));
+        .filter((k, v) -> v > 0, Named.as("filter_not_null_pagestay")).mapValues((k,v)->v/1000,Named.as("pagestay_to_second"));
 
         pagestayRaw
         .map((k, v) -> KeyValue.pair(k, new Metric(k, (double) v, STREAMING_PAGE_STAY_TOPIC)),
@@ -284,7 +284,7 @@ public class StreamingProcessing {
         .to(STREAMING_PAGE_STAY_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_pagestay_topic"));
 
     KTable<String, Double> totalPagestayStore = pagestayRaw.groupByKey().reduce(
-        (aggValue, newValue) -> (aggValue + newValue / 1000),
+        (aggValue, newValue) -> (aggValue + newValue),
         Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as(STREAMING_STATE_TOTAL_PAGE_STAY_STORE)
             .withValueSerde(doubleSerde));
 

@@ -15,6 +15,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
@@ -32,6 +33,7 @@ import streaming.objects.Metric;
 import streaming.objects.Query;
 import streaming.objects.VisitedLink;
 import streaming.process.DeduplicationTransformer;
+import streaming.process.FirstQueryTimeTransformer;
 import streaming.process.PageStayTransformer;
 import streaming.process.ReferenceTimeProcessor;
 import streaming.process.TTLStoreProcessor;
@@ -140,12 +142,16 @@ public class StreamingProcessing {
     final StoreBuilder<KeyValueStore<String, Long>> pageSequenceBuilder = Stores.keyValueStoreBuilder(
         Stores.persistentKeyValueStore(STREAMING_STATE_PAGE_SEQUENCE_STORE), stringSerde, longSerde);
 
+    final StoreBuilder<KeyValueStore<String, Long>> firstPagetBuilder = Stores.keyValueStoreBuilder(
+        Stores.persistentKeyValueStore(STREAMING_FIRST_PAGE_STORE), stringSerde, longSerde);
+
     builder.addStateStore(dedupStoreBuilder);
     builder.addStateStore(ttlStoreBuilder);
     builder.addStateStore(referenceTimeBuilder);
     builder.addStateStore(lasTimestampBuilder);
     builder.addStateStore(pageStayBuilder);
     builder.addStateStore(pageSequenceBuilder);
+    builder.addStateStore(firstPagetBuilder);
 
     /** Processing graphs for metrics */
 
@@ -276,9 +282,10 @@ public class StreamingProcessing {
 
     KStream<String, Double> pagestayRaw = pageLinks.transformValues(pageStayTranformerSuplier,
         STREAMING_STATE_PAGE_STAY_STORE, STREAMING_STATE_PAGE_SEQUENCE_STORE)
-        .filter((k, v) -> v > 0, Named.as("filter_not_null_pagestay")).mapValues((k,v)->v/1000,Named.as("pagestay_to_second"));
+        .filter((k, v) -> v > 0, Named.as("filter_not_null_pagestay"))
+        .mapValues((k, v) -> v / 1000, Named.as("pagestay_to_second"));
 
-        pagestayRaw
+    pagestayRaw
         .map((k, v) -> KeyValue.pair(k, new Metric(k, (double) v, STREAMING_PAGE_STAY_TOPIC)),
             Named.as("build_metric_pagestay"))
         .to(STREAMING_PAGE_STAY_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_pagestay_topic"));
@@ -295,17 +302,31 @@ public class StreamingProcessing {
         .to(STREAMING_TOTAL_PAGE_STAY_TOPIC,
             Produced.with(stringSerde, metricSerde).withName("sink_totalpagestay_topic"));
 
-
-
     // If Quotes
+    TransformerSupplier<String, VisitedLink, KeyValue<String,Double>> firstQueryTimeTransformerSuplier = new TransformerSupplier<String, VisitedLink, KeyValue<String,Double>>() {
+      public Transformer<String, VisitedLink, KeyValue<String,Double>> get() {
+        return new FirstQueryTimeTransformer(Duration.ofSeconds(1));
+      }
+    };
+    queries.filter((k, v) -> v.query.contains("\"") || v.query.contains("\'"))
+        .map((k, v) -> KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC)),
+            Named.as("build_metric_ifquotes"))
+        .to(STREAMING_IF_QUOTES_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_ifquotes_topic"));
 
+    // First time query
 
-    queries.filter((k,v)->v.query.contains("\"") || v.query.contains("\'"))
-    .map((k, v) -> KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC)),
-    Named.as("build_metric_ifquotes"))
-.to(STREAMING_IF_QUOTES_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_ifquotes_topic"));
-    
-            
+    KStream<String, Double> firstQueryTime = visitedLinks
+        .filter((key, value) -> value.url.equals("/session/search") || value.url.contains("/session/search-result"),
+            Named.as("filter_first_search_links"))
+        .transform(firstQueryTimeTransformerSuplier, STREAMING_FIRST_PAGE_STORE)
+        .filter((key, value) -> key != null && value != null, Named.as("filter_null_first_query_time"));
+
+    firstQueryTime
+        .map((key, value) -> KeyValue.pair(key, new Metric(key, value, STREAMING_FIRST_QUERY_TIME_TOPIC)),
+            Named.as("build_metric_firstquerytime"))
+        .to(STREAMING_FIRST_QUERY_TIME_TOPIC,
+            Produced.with(stringSerde, metricSerde).withName("sink_firstquerytime_topic"));
+
     // Clean up block ---
 
     KStream<String, Metric> totalcover = builder.stream(STREAMING_TOTALCOVER_TOPIC,
@@ -319,17 +340,19 @@ public class StreamingProcessing {
     KStream<String, Metric> writingTime = builder.stream(STREAMING_WRITINGTIME_TOPIC,
         Consumed.with(stringSerde, metricSerde));
 
-    KStream<String,Metric> pagestay=builder.stream(STREAMING_PAGE_STAY_TOPIC,Consumed.with(stringSerde,metricSerde));
+    KStream<String, Metric> pagestay = builder.stream(STREAMING_PAGE_STAY_TOPIC,
+        Consumed.with(stringSerde, metricSerde));
 
     ProcessorSupplier<String, Metric> ttl_suplier = new ProcessorSupplier<String, Metric>() {
       public Processor<String, Metric> get() {
         return new TTLStoreProcessor<Metric>(Duration.ofHours(1), Duration.ofHours(5), (key, value) -> value.type);
       }
     };
-    totalcover.merge(bmrelevant).merge(precision).merge(writingTime).merge(pagestay).process(ttl_suplier, STREAMING_STATE_TTL_STORE,
+    totalcover.merge(bmrelevant).merge(precision).merge(writingTime).merge(pagestay).process(ttl_suplier,
+        STREAMING_STATE_TTL_STORE,
         STREAMING_STATE_TOTALCOVER_STORE, STREAMING_STATE_BMRELEVANT_STORE, STREAMING_STATE_PRECISION_STORE,
         STREAMING_STATE_WRITING_TIME_STORE, STREAMING_STATE_DEDUP_STORE, STREAMING_STATE_REFERENCE_TIME_STORE,
-        STREAMING_STATE_PAGE_STAY_STORE,STREAMING_STATE_TOTAL_PAGE_STAY_STORE,
+        STREAMING_STATE_PAGE_STAY_STORE, STREAMING_STATE_TOTAL_PAGE_STAY_STORE                                                                                   ,
         STREAMING_STATE_LAST_KEYSTROKES_STORE);
 
     // foreach((key, value) -> System.out.print(value.username + "=>" + value.url +

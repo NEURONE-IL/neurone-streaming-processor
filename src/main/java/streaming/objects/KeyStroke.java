@@ -15,7 +15,8 @@ public class KeyStroke {
     private void unpackNested(Map<String,Object> payload){
         this.username = (String)payload.get("username");
         this.url=(String)payload.get("url");
-        this.localTimestamp= (Double) payload.get("localTimestamp");
+        Long localTimestamp= (Long) payload.get("localTimeStamp");
+        this.localTimestamp= localTimestamp.doubleValue();
         this.keyCode= (int) payload.get("keyCode");
     }
 

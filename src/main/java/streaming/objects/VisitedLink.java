@@ -15,7 +15,8 @@ public class VisitedLink {
         this.username = (String)payload.get("username");
         this.url=(String)payload.get("url");
         this.state= (String) payload.get("state");
-        this.localTimestamp= (Double) payload.get("localTimestamp");
+        Long localTimestamp= (Long) payload.get("localTimeStamp");
+        this.localTimestamp= localTimestamp.doubleValue();
     }
     @Override
     public String toString() {

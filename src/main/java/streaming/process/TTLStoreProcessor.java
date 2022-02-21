@@ -47,13 +47,13 @@ public class TTLStoreProcessor<V> implements Processor<String, V> {
     private KeyValueStore<String, Double> pageStayStore;
     private KeyValueStore<String,Double> totalPageStayStore;
 
-    private final KeyValueMapper<String, V, String> storeEtractor;
+    private final KeyValueMapper<String, V, String> storeExtractor;
 
     public TTLStoreProcessor(final Duration maxAge, final Duration scanFrequency,
-            KeyValueMapper<String, V, String> storeEtractor) {
+            KeyValueMapper<String, V, String> storeExtractor) {
         this.maxAge = maxAge;
         this.scanFrequency = scanFrequency;
-        this.storeEtractor = storeEtractor;
+        this.storeExtractor = storeExtractor;
 
     }
 
@@ -124,7 +124,7 @@ public class TTLStoreProcessor<V> implements Processor<String, V> {
     @Override
     public void process(String key, V value) {
 
-        final String type = storeEtractor.apply(key, value);
+        final String type = storeExtractor.apply(key, value);
         this.ttlStore.put(key + "-" + type, context.timestamp());
 
     }

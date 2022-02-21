@@ -67,6 +67,8 @@ public class AppProperties {
 
     public final static String STREAMING_STATE_PAGE_SEQUENCE_STORE=props.getProperty("streaming.state.page.sequence.store");
 
+    public final static String STREAMING_FIRST_PAGE_STORE=props.getProperty("streaming.state.first.page.store");
+    
     public final static String STREAMING_TOTALCOVER_TOPIC=props.getProperty("streaming.totalcover.topic");
 
     public final static String STREAMING_BMRELEVANT_TOPIC=props.getProperty("streaming.bmrelevant.topic");
@@ -80,5 +82,7 @@ public class AppProperties {
     public final static String STREAMING_PAGE_STAY_TOPIC=props.getProperty("streaming.total.page.stay.topic");
 
     public final static String STREAMING_IF_QUOTES_TOPIC= props.getProperty("streaming.total.ifquotes.topic");
+
+    public final static String STREAMING_FIRST_QUERY_TIME_TOPIC=props.getProperty("streaming.firstquerytime.topic");
 
 }

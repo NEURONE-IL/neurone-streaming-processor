@@ -19,12 +19,14 @@ public class FirstQueryTimeTransformer implements Transformer<String,VisitedLink
     private KeyValueStore<String, Long> firstPageStore;
 
     private final Duration scanFrequency;
-
+    private final Duration maxAge;
     private ProcessorContext context;
 
-    public FirstQueryTimeTransformer( final Duration scanFrequency) {
+    public FirstQueryTimeTransformer(  
+    final Duration scanFrequency,final Duration maxAge) {
 
         this.scanFrequency = scanFrequency;
+        this.maxAge=maxAge;
     }
 
     @Override
@@ -38,11 +40,15 @@ public class FirstQueryTimeTransformer implements Transformer<String,VisitedLink
 
                 while (all.hasNext()) {
                     final KeyValue<String, Long> record = all.next();
-
-                    Double diff = (double) timestamp - record.value;
-                    diff = diff / 1000;
-
-                    context.forward(record.key, diff);
+                    final long cutoff = timestamp - maxAge.toMillis();
+                    if(record.value!=null && record.value<cutoff){
+                        this.firstPageStore.delete(record.key);
+                    } else{
+                        Double diff = (double) timestamp - record.value;
+                        diff = diff / 1000;
+    
+                        context.forward(record.key, diff);
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -55,9 +61,10 @@ public class FirstQueryTimeTransformer implements Transformer<String,VisitedLink
     public KeyValue<String,Double> transform(String key, VisitedLink value) {
 
         if (value.url.equals("/session/search")) {
-
+           
             this.firstPageStore.put(key, value.localTimestamp.longValue());
         } else if (this.firstPageStore.get(key) != null) {
+
             this.firstPageStore.delete(key);
         }
         return null;

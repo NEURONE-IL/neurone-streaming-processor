@@ -303,20 +303,28 @@ public class StreamingProcessing {
             Produced.with(stringSerde, metricSerde).withName("sink_totalpagestay_topic"));
 
     // If Quotes
-    TransformerSupplier<String, VisitedLink, KeyValue<String,Double>> firstQueryTimeTransformerSuplier = new TransformerSupplier<String, VisitedLink, KeyValue<String,Double>>() {
-      public Transformer<String, VisitedLink, KeyValue<String,Double>> get() {
-        return new FirstQueryTimeTransformer(Duration.ofSeconds(1));
-      }
-    };
-    queries.filter((k, v) -> v.query.contains("\"") || v.query.contains("\'"))
-        .map((k, v) -> KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC)),
+    queries.map((k, v) -> {
+
+          if (v.query.contains("\"") || v.query.contains("\'")) {
+            return KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC));
+          } else {
+            return KeyValue.pair(k, new Metric(k, 0D, STREAMING_IF_QUOTES_TOPIC));
+          }
+        },
             Named.as("build_metric_ifquotes"))
         .to(STREAMING_IF_QUOTES_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_ifquotes_topic"));
 
     // First time query
 
+    TransformerSupplier<String, VisitedLink, KeyValue<String, Double>> firstQueryTimeTransformerSuplier = new TransformerSupplier<String, VisitedLink, KeyValue<String, Double>>() {
+      public Transformer<String, VisitedLink, KeyValue<String, Double>> get() {
+        return new FirstQueryTimeTransformer(Duration.ofSeconds(1), Duration.ofMinutes(5));
+      }
+    };
     KStream<String, Double> firstQueryTime = visitedLinks
-        .filter((key, value) -> value.url.equals("/session/search") || value.url.contains("/session/search-result"),
+        .filter(
+            (key, value) -> value.state.equals("PageEnter")
+                && (value.url.equals("/session/search") || value.url.contains("search-result")),
             Named.as("filter_first_search_links"))
         .transform(firstQueryTimeTransformerSuplier, STREAMING_FIRST_PAGE_STORE)
         .filter((key, value) -> key != null && value != null, Named.as("filter_null_first_query_time"));
@@ -352,7 +360,7 @@ public class StreamingProcessing {
         STREAMING_STATE_TTL_STORE,
         STREAMING_STATE_TOTALCOVER_STORE, STREAMING_STATE_BMRELEVANT_STORE, STREAMING_STATE_PRECISION_STORE,
         STREAMING_STATE_WRITING_TIME_STORE, STREAMING_STATE_DEDUP_STORE, STREAMING_STATE_REFERENCE_TIME_STORE,
-        STREAMING_STATE_PAGE_STAY_STORE, STREAMING_STATE_TOTAL_PAGE_STAY_STORE                                                                                   ,
+        STREAMING_STATE_PAGE_STAY_STORE, STREAMING_STATE_TOTAL_PAGE_STAY_STORE,
         STREAMING_STATE_LAST_KEYSTROKES_STORE);
 
     // foreach((key, value) -> System.out.print(value.username + "=>" + value.url +

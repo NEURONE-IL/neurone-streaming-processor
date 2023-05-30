@@ -1,8 +1,43 @@
 package streaming;
 
+import static streaming.utils.AppProperties.APPLICATION_ID_CONFIG;
+import static streaming.utils.AppProperties.APPLICATION_REST_DEFAULT_HOST;
+import static streaming.utils.AppProperties.KAFKA_BOOTSTRAP_SERVERS;
+import static streaming.utils.AppProperties.KAFKA_CACHE_MAX_BYTES_BUFFERING_CONFIG;
+import static streaming.utils.AppProperties.STREAMING_BMRELEVANT_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_CHALLENGE_STARTED_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_DB_BOOKMARKS_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_DB_EVENTS_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_DB_KEYSTROKES_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_DB_QUERIES_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_DB_VISITEDLINKS_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_FIRST_PAGE_STORE;
+import static streaming.utils.AppProperties.STREAMING_FIRST_QUERY_TIME_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_IF_QUOTES_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_PAGE_STAY_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_PRECISION_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_STATE_BMRELEVANT_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_DEDUP_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_LAST_KEYSTROKES_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_PAGE_SEQUENCE_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_PAGE_STAY_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_PRECISION_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_REFERENCE_TIME_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_TOTALCOVER_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_TOTAL_PAGE_STAY_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_TTL_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_WRITING_TIME_STORE;
+import static streaming.utils.AppProperties.STREAMING_TOTALCOVER_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_TOTAL_PAGE_STAY_TOPIC;
+import static streaming.utils.AppProperties.STREAMING_WRITINGTIME_TOPIC;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Properties;
+
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -22,12 +57,12 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
 import streaming.objects.Bookmark;
+import streaming.objects.Event;
 import streaming.objects.KeyStroke;
 import streaming.objects.Metric;
 import streaming.objects.Query;
@@ -38,13 +73,8 @@ import streaming.process.PageStayTransformer;
 import streaming.process.ReferenceTimeProcessor;
 import streaming.process.TTLStoreProcessor;
 import streaming.process.WritingTimeDeltaTransformer;
-import static streaming.utils.AppProperties.*;
 import streaming.utils.ArrayListSerde;
 import streaming.utils.CustomSerders;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Properties;
 
 public class StreamingProcessing {
 
@@ -118,6 +148,7 @@ public class StreamingProcessing {
     final Serde<Bookmark> bookmarkSerde = CustomSerders.Bookmark();
     final Serde<Query> querySerde = CustomSerders.Query();
     final Serde<KeyStroke> keystrokesSerde = CustomSerders.Keystrokes();
+    final Serde<Event> eventSerde = CustomSerders.Event();
     final Serde<Metric> metricSerde = CustomSerders.Metric();
 
     /* Builder state stores */
@@ -155,6 +186,19 @@ public class StreamingProcessing {
 
     /** Processing graphs for metrics */
 
+    // ChallengeStarted
+
+    KStream<String, Event> events = builder.stream(STREAMING_DB_EVENTS_TOPIC,
+        Consumed.with(stringSerde, eventSerde).withName("events_input_topic"));
+
+    events.filter((k, v) -> v.type.equals("ChallengeStarted") ||
+        v.type.equals("FirstChallengeStarted"),
+        Named.as("filter_challenge_started"))
+        .map((k, v) -> KeyValue.pair(k, new Metric(k, 1.0D, STREAMING_CHALLENGE_STARTED_TOPIC)),
+            Named.as("build_metric_challenge_started"))
+        .to(STREAMING_CHALLENGE_STARTED_TOPIC,
+            Produced.with(stringSerde, metricSerde).withName("sink_challenge_started_topic"));
+
     // Totalcover ---
 
     KStream<String, VisitedLink> visitedLinks = builder.stream(STREAMING_DB_VISITEDLINKS_TOPIC,
@@ -163,7 +207,7 @@ public class StreamingProcessing {
     ValueTransformerWithKeySupplier<String, VisitedLink, VisitedLink> suplier = new ValueTransformerWithKeySupplier<String, VisitedLink, VisitedLink>() {
       public ValueTransformerWithKey<String, VisitedLink, VisitedLink> get() {
         return new DeduplicationTransformer<String, VisitedLink, String>(STREAMING_STATE_DEDUP_STORE,
-            STREAMING_STATE_TTL_STORE, (key, value) -> value.username + value.url, "visitedlink");
+            STREAMING_STATE_TTL_STORE, (key, value) -> value.userId + value.url, "visitedlink");
       }
 
     };
@@ -187,7 +231,7 @@ public class StreamingProcessing {
       public ValueTransformerWithKey<String, Bookmark, Bookmark> get() {
         return new DeduplicationTransformer<String, Bookmark, String>(STREAMING_STATE_DEDUP_STORE,
             STREAMING_STATE_TTL_STORE,
-            (key, value) -> String.format("%s,%s,%s", value.username, value.url, value.action), "bookmark");
+            (key, value) -> String.format("%s,%s,%s", value.userId, value.url, value.action), "bookmark");
       }
     };
 
@@ -305,13 +349,13 @@ public class StreamingProcessing {
     // If Quotes
     queries.map((k, v) -> {
 
-          if (v.query.contains("\"") || v.query.contains("\'")) {
-            return KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC));
-          } else {
-            return KeyValue.pair(k, new Metric(k, 0D, STREAMING_IF_QUOTES_TOPIC));
-          }
-        },
-            Named.as("build_metric_ifquotes"))
+      if (v.query.contains("\"") || v.query.contains("\'")) {
+        return KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC));
+      } else {
+        return KeyValue.pair(k, new Metric(k, 0D, STREAMING_IF_QUOTES_TOPIC));
+      }
+    },
+        Named.as("build_metric_ifquotes"))
         .to(STREAMING_IF_QUOTES_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_ifquotes_topic"));
 
     // First time query

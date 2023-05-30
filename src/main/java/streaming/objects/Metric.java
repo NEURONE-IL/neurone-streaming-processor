@@ -3,12 +3,12 @@ package streaming.objects;
 
 public class Metric {
 
-    public String username;
+    public String userId;
     public Double value;
     public String type;
 
-    public Metric(String username,Double value,String type){
-        this.username=username;
+    public Metric(String userId,Double value,String type){
+        this.userId=userId;
         this.value=value;
         this.type=type;
     }

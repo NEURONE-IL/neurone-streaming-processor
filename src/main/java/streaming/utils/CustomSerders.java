@@ -5,6 +5,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 
 import streaming.objects.Bookmark;
+import streaming.objects.Event;
 import streaming.objects.KeyStroke;
 import streaming.objects.Metric;
 import streaming.objects.Query;
@@ -42,6 +43,11 @@ public final class CustomSerders {
         }
     }
 
+    static public final class EventSerde extends Serdes.WrapperSerde<Event>{
+        public EventSerde(){
+            super(new JsonSerializer<>(), new JsonDeserializer<>(Event.class));
+        }
+    }
 
 
     public static Serde<VisitedLink> VisitedLink() {
@@ -62,5 +68,9 @@ public final class CustomSerders {
 
     public static Serde<Query> Query(){
         return new CustomSerders.QuerySerde();
+    }
+
+    public static Serde<Event> Event(){
+        return new CustomSerders.EventSerde();
     }
 }

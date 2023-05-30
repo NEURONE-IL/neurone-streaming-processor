@@ -6,18 +6,18 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class KeyStroke {
     
-    public String username;
     public String url;
     public Double localTimestamp;
     public int keyCode;
+    public String userId;
 
     @JsonProperty("payload")
     private void unpackNested(Map<String,Object> payload){
-        this.username = (String)payload.get("username");
         this.url=(String)payload.get("url");
-        Long localTimestamp= (Long) payload.get("localTimeStamp");
-        this.localTimestamp= localTimestamp.doubleValue();
+        Double localTimestamp= (Double) payload.get("localTimeStamp");
+        this.localTimestamp= localTimestamp;
         this.keyCode= (int) payload.get("keyCode");
+        this.userId=(String) payload.get("userId");
     }
 
 

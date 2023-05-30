@@ -30,6 +30,7 @@ public class HostStoreInfo {
   private String host;
   private int port;
   private Set<String> storeNames;
+  
 
   public HostStoreInfo(){}
 

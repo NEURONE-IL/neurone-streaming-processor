@@ -11,14 +11,15 @@ public class VisitedLink {
     public String userId;
 
     @JsonProperty("payload")
-    private void unpackNested(Map<String,Object> payload) {
-        this.url=(String)payload.get("url");
-        this.state= (String) payload.get("state");
-        Double localTimestamp= (Double) payload.get("localTimeStamp");
-        this.localTimestamp= localTimestamp;
-        this.userId=(String) payload.get("userId");
-        
+    private void unpackNested(Map<String, Object> payload) {
+        this.url = (String) payload.get("url");
+        this.state = (String) payload.get("state");
+        Long localTimestamp = (Long) payload.get("localTimeStamp");
+        this.localTimestamp = localTimestamp.doubleValue();
+        this.userId = (String) payload.get("userId");
+
     }
+
     @Override
     public String toString() {
         // TODO Auto-generated method stub

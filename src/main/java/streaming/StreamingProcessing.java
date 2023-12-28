@@ -27,6 +27,7 @@ import static streaming.utils.AppProperties.STREAMING_STATE_TOTALCOVER_STORE;
 import static streaming.utils.AppProperties.STREAMING_STATE_TOTAL_PAGE_STAY_STORE;
 import static streaming.utils.AppProperties.STREAMING_STATE_TTL_STORE;
 import static streaming.utils.AppProperties.STREAMING_STATE_WRITING_TIME_STORE;
+import static streaming.utils.AppProperties.STREAMING_STATE_METADATA_STORE;
 import static streaming.utils.AppProperties.STREAMING_TOTALCOVER_TOPIC;
 import static streaming.utils.AppProperties.STREAMING_TOTAL_PAGE_STAY_TOPIC;
 import static streaming.utils.AppProperties.STREAMING_WRITINGTIME_TOPIC;
@@ -61,14 +62,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
+import streaming.interfaces.MetadataProvider;
 import streaming.objects.Bookmark;
 import streaming.objects.Event;
 import streaming.objects.KeyStroke;
+import streaming.objects.Metadata;
 import streaming.objects.Metric;
 import streaming.objects.Query;
 import streaming.objects.VisitedLink;
 import streaming.process.DeduplicationTransformer;
 import streaming.process.FirstQueryTimeTransformer;
+import streaming.process.MetadataTransformer;
 import streaming.process.PageStayTransformer;
 import streaming.process.ReferenceTimeProcessor;
 import streaming.process.TTLStoreProcessor;
@@ -150,6 +154,7 @@ public class StreamingProcessing {
     final Serde<KeyStroke> keystrokesSerde = CustomSerders.Keystrokes();
     final Serde<Event> eventSerde = CustomSerders.Event();
     final Serde<Metric> metricSerde = CustomSerders.Metric();
+    final Serde<Metadata> metadataSerde = CustomSerders.Metadata();
 
     /* Builder state stores */
 
@@ -176,6 +181,9 @@ public class StreamingProcessing {
     final StoreBuilder<KeyValueStore<String, Long>> firstPagetBuilder = Stores.keyValueStoreBuilder(
         Stores.persistentKeyValueStore(STREAMING_FIRST_PAGE_STORE), stringSerde, longSerde);
 
+    final StoreBuilder<KeyValueStore<String, Metadata>> metadataBuilder = Stores.keyValueStoreBuilder(
+        Stores.persistentKeyValueStore(STREAMING_STATE_METADATA_STORE), stringSerde, metadataSerde);
+
     builder.addStateStore(dedupStoreBuilder);
     builder.addStateStore(ttlStoreBuilder);
     builder.addStateStore(referenceTimeBuilder);
@@ -183,14 +191,23 @@ public class StreamingProcessing {
     builder.addStateStore(pageStayBuilder);
     builder.addStateStore(pageSequenceBuilder);
     builder.addStateStore(firstPagetBuilder);
+    builder.addStateStore(metadataBuilder);
 
     /** Processing graphs for metrics */
+
+    ValueTransformerWithKeySupplier<String, MetadataProvider, MetadataProvider> metadata_supplier = new ValueTransformerWithKeySupplier<String, MetadataProvider, MetadataProvider>() {
+      public ValueTransformerWithKey<String, MetadataProvider, MetadataProvider> get() {
+        return new MetadataTransformer<String, MetadataProvider, MetadataProvider>(STREAMING_STATE_METADATA_STORE);
+      }
+    };
 
     // ChallengeStarted
 
     KStream<String, Event> events = builder.stream(STREAMING_DB_EVENTS_TOPIC,
         Consumed.with(stringSerde, eventSerde).withName("events_input_topic"));
 
+    events.transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE);
+    
     events.filter((k, v) -> v.type.equals("ChallengeStarted") ||
         v.type.equals("FirstChallengeStarted"),
         Named.as("filter_challenge_started"))

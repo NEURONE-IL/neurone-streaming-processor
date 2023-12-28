@@ -72,6 +72,8 @@ public class AppProperties {
     public final static String STREAMING_STATE_PAGE_SEQUENCE_STORE = props
             .getProperty("streaming.state.page.sequence.store");
 
+    public final static String STREAMING_STATE_METADATA_STORE = props.getProperty("streaming.state.metadata.store");
+
     public final static String STREAMING_FIRST_PAGE_STORE = props.getProperty("streaming.state.first.page.store");
 
     public final static String STREAMING_TOTALCOVER_TOPIC = props.getProperty("streaming.totalcover.topic");

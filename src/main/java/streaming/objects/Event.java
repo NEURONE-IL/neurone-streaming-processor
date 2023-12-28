@@ -4,12 +4,15 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class Event {
+import streaming.interfaces.MetadataProvider;
+
+public class Event  implements MetadataProvider{
     public String url;
     public String type;
     public Double localTimestamp;
     public String userId;
     public String source;
+    public String studyId;
 
     @JsonProperty("payload")
     private void unpackNested(Map<String, Object> payload) {
@@ -19,5 +22,10 @@ public class Event {
         this.localTimestamp = localTimestamp.doubleValue();
         this.userId = (String) payload.get("userId");
         this.source = (String) payload.get("source");
+    }
+
+    @Override
+    public Metadata getMetadata() {
+        return new Metadata(this.studyId);   
     }
 }

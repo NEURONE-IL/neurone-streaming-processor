@@ -68,6 +68,7 @@ import streaming.objects.Event;
 import streaming.objects.KeyStroke;
 import streaming.objects.Metadata;
 import streaming.objects.Metric;
+import streaming.objects.MetricValue;
 import streaming.objects.Query;
 import streaming.objects.VisitedLink;
 import streaming.process.DeduplicationTransformer;
@@ -77,6 +78,7 @@ import streaming.process.PageStayTransformer;
 import streaming.process.ReferenceTimeProcessor;
 import streaming.process.TTLStoreProcessor;
 import streaming.process.WritingTimeDeltaTransformer;
+import streaming.process.MetricValueTransformer;
 import streaming.utils.ArrayListSerde;
 import streaming.utils.CustomSerders;
 
@@ -201,17 +203,24 @@ public class StreamingProcessing {
       }
     };
 
+    ValueTransformerWithKeySupplier<String, Object, MetricValue> metric_value_supplier = new ValueTransformerWithKeySupplier<String, Object, MetricValue>() {
+      public ValueTransformerWithKey<String, Object, MetricValue> get() {
+        return new MetricValueTransformer<String, Object, MetricValue>(STREAMING_STATE_METADATA_STORE);
+      }
+    };
+
     // ChallengeStarted
 
     KStream<String, Event> events = builder.stream(STREAMING_DB_EVENTS_TOPIC,
         Consumed.with(stringSerde, eventSerde).withName("events_input_topic"));
 
-    events.transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE);
-    
-    events.filter((k, v) -> v.type.equals("ChallengeStarted") ||
-        v.type.equals("FirstChallengeStarted"),
-        Named.as("filter_challenge_started"))
-        .map((k, v) -> KeyValue.pair(k, new Metric(k, 1.0D, STREAMING_CHALLENGE_STARTED_TOPIC)),
+    events.transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE)
+        .mapValues((k, v) -> (Event) v, Named.as("metadataprovider_event"))
+        .filter((k, v) -> v.type.equals("ChallengeStarted") ||
+            v.type.equals("FirstChallengeStarted"),
+            Named.as("filter_challenge_started"))
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((k, v) -> KeyValue.pair(k, new Metric(k, 1.0D, STREAMING_CHALLENGE_STARTED_TOPIC, v.metadata)),
             Named.as("build_metric_challenge_started"))
         .to(STREAMING_CHALLENGE_STARTED_TOPIC,
             Produced.with(stringSerde, metricSerde).withName("sink_challenge_started_topic"));
@@ -230,7 +239,8 @@ public class StreamingProcessing {
     };
 
     KStream<String, VisitedLink> pageLinks = visitedLinks.filter((key, value) -> value.url.contains("page"),
-        Named.as("filter_page_links"));
+        Named.as("filter_page_links")).transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE).
+        mapValues((k, v) -> (VisitedLink) v, Named.as("metadataprovider_visitedlink"));
 
     KTable<String, Long> totalCoverStore = pageLinks
         .transformValues(suplier, STREAMING_STATE_DEDUP_STORE, STREAMING_STATE_TTL_STORE)
@@ -238,7 +248,8 @@ public class StreamingProcessing {
         .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(STREAMING_STATE_TOTALCOVER_STORE));
 
     totalCoverStore.toStream().filter((key, value) -> key != null && value != null, Named.as("filter_null_totalcover"))
-        .map((key, value) -> KeyValue.pair(key, new Metric(key, (double) value, STREAMING_TOTALCOVER_TOPIC)),
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((key, value) -> KeyValue.pair(key, new Metric(key, value.value, STREAMING_TOTALCOVER_TOPIC, value.metadata)),
             Named.as("build_metric_totalcover"))
         .to(STREAMING_TOTALCOVER_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_totalcover_topic"));
 
@@ -253,7 +264,9 @@ public class StreamingProcessing {
     };
 
     KStream<String, Bookmark> bookmarks = builder.stream(STREAMING_DB_BOOKMARKS_TOPIC,
-        Consumed.with(stringSerde, bookmarkSerde).withName("bookmark_input_topic"));
+        Consumed.with(stringSerde, bookmarkSerde).withName("bookmark_input_topic")).
+        transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE).
+        mapValues( (k, v) -> (Bookmark) v, Named.as("metadataprovider_bookmark"));
 
     KTable<String, Long> bmRelevantStore = bookmarks.filter((key, value) -> value.relevant && value.userMade)
         .transformValues(suplier_bookmark, STREAMING_STATE_DEDUP_STORE, STREAMING_STATE_TTL_STORE)
@@ -272,7 +285,8 @@ public class StreamingProcessing {
 
     bmRelevantStore.toStream()
         .filter((key, value) -> key != null && value != null, Named.as("Filter_not_null_bmrelevant"))
-        .map((key, value) -> KeyValue.pair(key, new Metric(key, (double) value, STREAMING_BMRELEVANT_TOPIC)),
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((key, value) -> KeyValue.pair(key, new Metric(key, value.value, STREAMING_BMRELEVANT_TOPIC, value.metadata)),
             Named.as("build_bmrelevant"))
         .to(STREAMING_BMRELEVANT_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_bmrelevant_topic"));
 
@@ -289,7 +303,8 @@ public class StreamingProcessing {
         .withValueSerde(doubleSerde));
 
     precisionStore.toStream().filter((key, value) -> key != null && value != null, Named.as("filter_not_nul_precision"))
-        .map((key, value) -> KeyValue.pair(key, new Metric(key, value, STREAMING_PRECISION_TOPIC)),
+    .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)    
+    .map((key, value) -> KeyValue.pair(key, new Metric(key, value.value, STREAMING_PRECISION_TOPIC, value.metadata)),
             Named.as("build_precision_metric"))
         .to(STREAMING_PRECISION_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_precision_topic"));
 
@@ -302,7 +317,9 @@ public class StreamingProcessing {
     };
 
     KStream<String, KeyStroke> keystrokes = builder.stream(STREAMING_DB_KEYSTROKES_TOPIC,
-        Consumed.with(stringSerde, keystrokesSerde).withName("keystrokes_input_topic"));
+        Consumed.with(stringSerde, keystrokesSerde).withName("keystrokes_input_topic"))
+        .transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE)
+        .mapValues((k, v) -> (KeyStroke) v, Named.as("metadataprovider_keystrokes"));
 
     KTable<String, Double> writingTimeStore = keystrokes
         .filter((key, value) -> value.url.contains("search"), Named.as("filter_keytrsokes_by_origin"))
@@ -315,7 +332,8 @@ public class StreamingProcessing {
 
     writingTimeStore.toStream()
         .filter((key, value) -> key != null && value != null, Named.as("filter_null_writtingtime"))
-        .map((key, value) -> KeyValue.pair(key, new Metric(key, (double) value, STREAMING_WRITINGTIME_TOPIC)),
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((key, value) -> KeyValue.pair(key, new Metric(key, value.value, STREAMING_WRITINGTIME_TOPIC, value.metadata)),
             Named.as("build_metric_writtingtime"))
         .to(STREAMING_WRITINGTIME_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_writingtime_topic"));
 
@@ -326,7 +344,9 @@ public class StreamingProcessing {
     };
 
     KStream<String, Query> queries = builder.stream(STREAMING_DB_QUERIES_TOPIC,
-        Consumed.with(stringSerde, querySerde).withName("query_input_topic"));
+        Consumed.with(stringSerde, querySerde).withName("query_input_topic"))
+        .transformValues(metadata_supplier, STREAMING_STATE_METADATA_STORE)
+        .mapValues((k, v) -> (Query) v, Named.as("metadataprovider_query"));
 
     queries.mapValues((k, v) -> v.localTimestamp.longValue())
         .merge(pageLinks.mapValues((k, v) -> v.localTimestamp.longValue()))
@@ -347,7 +367,8 @@ public class StreamingProcessing {
         .mapValues((k, v) -> v / 1000, Named.as("pagestay_to_second"));
 
     pagestayRaw
-        .map((k, v) -> KeyValue.pair(k, new Metric(k, (double) v, STREAMING_PAGE_STAY_TOPIC)),
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((k, v) -> KeyValue.pair(k, new Metric(k, (double) v.value, STREAMING_PAGE_STAY_TOPIC, v.metadata)),
             Named.as("build_metric_pagestay"))
         .to(STREAMING_PAGE_STAY_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_pagestay_topic"));
 
@@ -358,19 +379,19 @@ public class StreamingProcessing {
 
     totalPagestayStore.toStream()
         .filter((key, value) -> key != null && value != null, Named.as("filter_null_totalpagestay"))
-        .map((key, value) -> KeyValue.pair(key, new Metric(key, (double) value, STREAMING_TOTAL_PAGE_STAY_TOPIC)),
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((key, value) -> KeyValue.pair(key, new Metric(key, value.value, STREAMING_TOTAL_PAGE_STAY_TOPIC, value.metadata)),
             Named.as("build_metric_totalpagestay"))
         .to(STREAMING_TOTAL_PAGE_STAY_TOPIC,
             Produced.with(stringSerde, metricSerde).withName("sink_totalpagestay_topic"));
 
     // If Quotes
-    queries.map((k, v) -> {
-
-      if (v.query.contains("\"") || v.query.contains("\'")) {
-        return KeyValue.pair(k, new Metric(k, 1D, STREAMING_IF_QUOTES_TOPIC));
-      } else {
-        return KeyValue.pair(k, new Metric(k, 0D, STREAMING_IF_QUOTES_TOPIC));
-      }
+    queries
+    .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+    .map((k, v) -> {
+      Query query = (Query) v.value;
+      double metricValue = (query.query.contains("\"") || query.query.contains("\'")) ? 1D : 0D;
+      return KeyValue.pair(k, new Metric(k, metricValue, STREAMING_IF_QUOTES_TOPIC, v.metadata));
     },
         Named.as("build_metric_ifquotes"))
         .to(STREAMING_IF_QUOTES_TOPIC, Produced.with(stringSerde, metricSerde).withName("sink_ifquotes_topic"));
@@ -391,7 +412,8 @@ public class StreamingProcessing {
         .filter((key, value) -> key != null && value != null, Named.as("filter_null_first_query_time"));
 
     firstQueryTime
-        .map((key, value) -> KeyValue.pair(key, new Metric(key, value, STREAMING_FIRST_QUERY_TIME_TOPIC)),
+        .transformValues(metric_value_supplier, STREAMING_STATE_METADATA_STORE)
+        .map((key, value) -> KeyValue.pair(key, new Metric(key,  value.value, STREAMING_FIRST_QUERY_TIME_TOPIC, value.metadata)),
             Named.as("build_metric_firstquerytime"))
         .to(STREAMING_FIRST_QUERY_TIME_TOPIC,
             Produced.with(stringSerde, metricSerde).withName("sink_firstquerytime_topic"));

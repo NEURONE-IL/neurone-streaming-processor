@@ -7,4 +7,17 @@ public class Metadata {
         this.studyId = studyId;
     }
 
+    // No-argument constructor
+    public Metadata() {
+    }
+
+    // Getter and setter methods
+    public String getStudyId() {
+        return studyId;
+    }
+
+    public void setStudyId(String studyId) {
+        this.studyId = studyId;
+    }
+
 }

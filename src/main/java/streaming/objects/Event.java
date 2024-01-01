@@ -22,6 +22,7 @@ public class Event  implements MetadataProvider{
         this.localTimestamp = localTimestamp.doubleValue();
         this.userId = (String) payload.get("userId");
         this.source = (String) payload.get("source");
+        this.studyId = (String) payload.get("studyId");
     }
 
     @Override
